@@ -65,7 +65,7 @@ class MiWiFi():
 
 if __name__ == "__main__":
     address_master = input("Master (online, configured) router address (leave blank for default->http://miwifi.com): ")
-    if not address_master.startswith('http'):
+    if address_master != '' and not address_master.startswith('http'):
         address_master = f"http://{address_master}"
     
     password_master = getpass.getpass(prompt='Master password: ')
