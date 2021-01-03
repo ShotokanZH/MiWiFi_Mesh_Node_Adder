@@ -22,15 +22,53 @@ def generate_nonce(miwifi_type=0):
 def generate_password_hash(nonce, password):
     return sha1(nonce + sha1(password + PUBLIC_KEY))
 
-
 class MiWiFi():
-    def __init__(self, address="http://miwifi.com/", miwifi_type=0):
+    def __init__(self, address, miwifi_type=0):
         if address.endswith("/"):
             address = address[:-1]
 
         self.address = address
         self.token = None
         self.miwifi_type = miwifi_type
+
+    def get_infos(self):
+        if not self.token:
+            print("You need to be logged in to use this function!")
+            return None
+        response = requests.get(f"{self.address}/cgi-bin/luci/;stok={self.token}/api/misystem/status")
+        jdata = response.json()
+        if response.status_code == 200 and "hardware" in jdata:
+            print(f"Platform: {jdata['hardware']['platform']}")
+            print("")
+        else:
+            print("Something went wrong while retrieving the infos!")
+            exit(1)
+
+    def get_5ghz_xiaomi(self):
+        if not self.token:
+            print("You need to be logged in to use this function!")
+            return None
+        print(f"Asking master to scan for Xiaomi Wifi APs...")
+        response = requests.get(f"{self.address}/cgi-bin/luci/;stok={self.token}/api/xqnetwork/wifi_list")
+        jdata = response.json()
+        detected = 0
+        if response.status_code == 200 and "list" in jdata:
+            for ap in jdata["list"]:
+                if ap["ssid"].startswith("Xiaomi_") and ap["encryption"] == "NONE":
+                    if (ap["band"] == "5g" and ap["ssid"].endswith("_5G")) or (ap["band"] == "2g"):
+                        if detected == 0:
+                            print("Detected APs:")
+                        print(f'\tBand: {ap["band"]}hz SSID: {ap["ssid"]} CH: {ap["channel"]} MODEL: {ap["wsc_modelname"]} MAC: {ap["bssid"]}')
+                        if ap["band"] == "2g":
+                            pmac = ap['bssid'].split(":")
+                            pmac[-1] = hex(int(pmac[-1],16)+1)[2:]
+                            pmac = ':'.join(pmac).upper()
+                            print(f'\t\tPOSSIBLE MAC for 5GHz: {pmac}')
+                        detected += 1
+        if detected == 0:
+            print("No AP detected! (Are the two devices close enough?)")
+            print("You can continue, but it will probably fail.")
+        print("")
 
     def login(self, password):
         nonce = generate_nonce(self.miwifi_type)
@@ -51,6 +89,9 @@ class MiWiFi():
         return None
 
     def add_mesh_node(self, macaddr, location="Study"):
+        if not self.token:
+            print("You need to be logged in to use this function!")
+            return None
         response = requests.post(
             f"{self.address}/cgi-bin/luci/;stok={self.token}/api/xqnetwork/add_mesh_node",
             data={
@@ -64,18 +105,21 @@ class MiWiFi():
         return None
 
 if __name__ == "__main__":
-    address_master = input("Master (online, configured) router address (leave blank for default->http://miwifi.com): ")
-    if address_master != '' and not address_master.startswith('http'):
+    address_master = input("Master (online, configured) router address: ")
+    if address_master and not address_master.startswith('http'):
         address_master = f"http://{address_master}"
-    
+
     password_master = getpass.getpass(prompt='Master password: ')
     router = MiWiFi(address = address_master)
     print("Logging in..")
     if not router.login(password_master):
         print("Authentication failed!")
         exit(1)
-    print("Login: OK")
+    print("Login: OK\n")
     
+    router.get_infos()
+    router.get_5ghz_xiaomi()
+
     mac_address_client = input("Client (not configured) 5GHz mac address (AA:BB:CC:DD:EE:FF): ")
     print(f"Adding {mac_address_client} as mesh node..")
     if router.add_mesh_node(mac_address_client):
