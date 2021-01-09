@@ -47,6 +47,7 @@ Resetting the device, configuring it to use Italian servers and then calling dir
 ## Usage
 Run:
 ```
+python3 -m pip install -r requirements.txt
 python3 addmesh.py
 ```
 Just input the ip address of the master router, the password and the mac address of the client.

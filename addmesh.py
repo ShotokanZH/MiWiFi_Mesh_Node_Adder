@@ -30,6 +30,7 @@ class MiWiFi():
         self.address = address
         self.token = None
         self.miwifi_type = miwifi_type
+        self.aiot = None
 
     def get_infos(self):
         if not self.token:
@@ -39,10 +40,45 @@ class MiWiFi():
         jdata = response.json()
         if response.status_code == 200 and "hardware" in jdata:
             print(f"Platform: {jdata['hardware']['platform']}")
-            print("")
         else:
             print("Something went wrong while retrieving the infos!")
             exit(1)
+
+    def set_aiot_status(self,status):
+        if not self.token:
+            print("You need to be logged in to use this function!")
+            return None
+        aiotstatus = (status) and "ON" or "OFF"
+        print(f"Turning AIoT scan to {aiotstatus}...")
+        response = requests.post(
+            f"{self.address}/cgi-bin/luci/;stok={self.token}/api/xqnetwork/miscan_switch",
+            data = {
+                "on": str(int(status))
+            },
+        )
+        jdata = response.json()
+        if response.status_code == 200:
+            self.get_aiot_status()
+        else:
+            print("Something went wrong while retrieving the aiot infos!")
+            exit(1)
+
+    def get_aiot_status(self):
+        if not self.token:
+            print("You need to be logged in to use this function!")
+            return None
+        response = requests.get(f"{self.address}/cgi-bin/luci/;stok={self.token}/api/xqnetwork/get_miscan_switch")
+        jdata = response.json()
+        if response.status_code == 200 and "enabled" in jdata:
+            self.aiot = not not jdata['enabled']
+            aiotstatus = (self.aiot) and "ON" or "OFF"
+            print(f"AIoT scan status: {aiotstatus}")
+            print("")
+            return self.aiot
+        else:
+            print("Something went wrong while retrieving the aiot infos!")
+            exit(1)
+
 
     def get_5ghz_xiaomi(self):
         if not self.token:
@@ -105,6 +141,7 @@ class MiWiFi():
         return None
 
 if __name__ == "__main__":
+    print("MiWiFi Mesh Node Adder v1.0 by ShotokanZH")
     address_master = input("Master (online, configured) router address: ")
     if address_master and not address_master.startswith('http'):
         address_master = f"http://{address_master}"
@@ -118,6 +155,8 @@ if __name__ == "__main__":
     print("Login: OK\n")
     
     router.get_infos()
+    if not router.get_aiot_status():
+        router.set_aiot_status(True)
     router.get_5ghz_xiaomi()
 
     mac_address_client = input("Client (not configured) 5GHz mac address (AA:BB:CC:DD:EE:FF): ")
